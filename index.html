@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Board-to-X Sync</title>
-<meta name="description" content="A personal, single-user automation that shares Pins from the operator's own Pinterest board to the operator's own X account.">
+<meta name="description" content="A personal, single-user automation that notifies the operator of new Pins on their own Pinterest board so they can share them on X.">
 <style>
   :root {
     color-scheme: light dark;
@@ -35,26 +35,27 @@
 <body>
 
 <h1>Board-to-X Sync</h1>
-<p class="tagline">A personal automation that shares Pins from my own Pinterest board to my own X (Twitter) account.</p>
+<p class="tagline">A personal automation that helps me share Pins from my own Pinterest board to my own X (Twitter) account.</p>
 
 <h2>What it does</h2>
 <ol>
-  <li>Reads Pins from a single Pinterest board owned by the operator, using the Pinterest API.</li>
-  <li>Posts selected Pin images and their text to the operator's own X account, using the X API, with a link back to the original Pin on Pinterest.</li>
+  <li>Once a day, reads the public RSS feed of a single Pinterest board owned by the operator.</li>
+  <li>Emails the operator a link for each new Pin that opens X's post screen with the Pin's title and a link back to the original Pin.</li>
+  <li>The operator reviews and posts each one manually. On mobile, the <a href="share.html">share page</a> can attach the Pin image via the device's share menu.</li>
 </ol>
 
 <h2>Who it's for</h2>
 <p>
 Board-to-X Sync is built and operated by an individual developer for their
-own personal use. It is not a public service, is not offered to other users,
-and only connects to the operator's own Pinterest and X accounts.
+own personal use. It is not a public service and is not offered to other
+users.
 </p>
 
-<h2>Pinterest API usage</h2>
+<h2>What it does not do</h2>
 <ul>
-  <li>Read-only access to the operator's own board and Pins (<code>boards:read</code>, <code>pins:read</code>)</li>
-  <li>Basic account information required for authentication (<code>user_accounts:read</code>)</li>
-  <li>The tool never creates, edits, or deletes Pins or boards, and never accesses other users' data.</li>
+  <li>It does not use the Pinterest API or the X API, and does not log in to either service.</li>
+  <li>It never posts automatically, and never creates, edits, or deletes Pins or boards.</li>
+  <li>It never accesses other users' data or any non-public data.</li>
 </ul>
 
 <h2>Privacy</h2>
