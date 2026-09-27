@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board-to-X Sync</title>
+<meta name="description" content="A personal, single-user automation that shares Pins from the operator's own Pinterest board to the operator's own X account.">
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    line-height: 1.7;
+    color: #1a1a1a;
+    background: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e6e6; background: #12121a; }
+    a { color: #8ab4ff; }
+    .tagline { color: #9a9a9a; }
+    hr { border-color: #333; }
+  }
+  h1 { font-size: 1.6em; margin-bottom: 0.2em; }
+  h2 { font-size: 1.15em; margin-top: 2em; }
+  .tagline { color: #666; margin-bottom: 2em; }
+  ul, ol { padding-left: 1.3em; }
+  hr { margin: 2.5em 0; border: none; border-top: 1px solid #ddd; }
+  code { background: rgba(127,127,127,0.15); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Board-to-X Sync</h1>
+<p class="tagline">A personal automation that shares Pins from my own Pinterest board to my own X (Twitter) account.</p>
+
+<h2>What it does</h2>
+<ol>
+  <li>Reads Pins from a single Pinterest board owned by the operator, using the Pinterest API.</li>
+  <li>Posts selected Pin images and their text to the operator's own X account, using the X API.</li>
+</ol>
+
+<h2>Who it's for</h2>
+<p>
+Board-to-X Sync is built and operated by an individual developer for their
+own personal use. It is not a public service, is not offered to other users,
+and only connects to the operator's own Pinterest and X accounts.
+</p>
+
+<h2>Pinterest API usage</h2>
+<ul>
+  <li>Read-only access to the operator's own board and Pins (<code>boards:read</code>, <code>pins:read</code>)</li>
+  <li>Basic account information required for authentication (<code>user_accounts:read</code>)</li>
+  <li>The tool never creates, edits, or deletes Pins or boards, and never accesses other users' data.</li>
+</ul>
+
+<h2>Privacy</h2>
+<p>
+See the <a href="privacy-policy.html">Privacy Policy</a> for details on what
+data is accessed and how it is handled.
+</p>
+
+<hr>
+
+<p>
+Contact: <a href="https://github.com/shntrisdr">https://github.com/shntrisdr</a>
+</p>
+
+</body>
+</html>
