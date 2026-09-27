@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pin Draft — Board-to-X Sync</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1a1a1a;
+    --bg: #ffffff;
+    --muted: #666;
+    --line: #ddd;
+    --btn-bg: #1a1a1a;
+    --btn-fg: #fff;
+    --btn2-bg: #eee;
+    --btn2-fg: #1a1a1a;
+    --field: rgba(127,127,127,0.08);
+    --error: #d33;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e6e6e6;
+      --bg: #12121a;
+      --muted: #9a9a9a;
+      --line: #333;
+      --btn-bg: #e6e6e6;
+      --btn-fg: #12121a;
+      --btn2-bg: #2a2a35;
+      --btn2-fg: #e6e6e6;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    line-height: 1.6;
+    color: var(--fg);
+    background: var(--bg);
+  }
+  h1 { font-size: 1.3em; margin: 0 0 4px; }
+  .note { color: var(--muted); font-size: 0.85em; }
+  .error { color: var(--error); }
+  label { display: block; font-weight: 600; margin: 20px 0 6px; }
+  textarea {
+    box-sizing: border-box; width: 100%; padding: 10px; font: inherit; color: inherit;
+    background: var(--field); border: 1px solid var(--line); border-radius: 8px; resize: vertical;
+  }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .card img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--field); }
+  .card .meta { padding: 6px 8px; font-size: 0.8em; }
+  .card .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .ctrl { display: flex; gap: 4px; margin-top: 4px; }
+  .card .ctrl button { flex: 1; padding: 4px; margin: 0; font-size: 0.9em; border-radius: 6px; }
+  .count { text-align: right; font-size: 0.85em; color: var(--muted); }
+  .count.over { color: var(--error); font-weight: 600; }
+  button {
+    display: block; width: 100%; padding: 12px; margin: 8px 0;
+    font: inherit; font-weight: 600; border: none; border-radius: 999px; cursor: pointer;
+    background: var(--btn-bg); color: var(--btn-fg);
+  }
+  button.secondary { background: var(--btn2-bg); color: var(--btn2-fg); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .row { display: flex; gap: 8px; }
+  .row button { flex: 1; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<h1>Pin Draft</h1>
+<p class="note">Pinterest の Pin の URL を最大 4 つ貼ると、画像つきの X 投稿の下書きを作ります。</p>
+
+<label for="urls">Pin の URL（1 行に 1 つ、最大 4 つ）</label>
+<textarea id="urls" rows="4" placeholder="https://www.pinterest.com/pin/1234567890/"></textarea>
+<p class="note" id="status"></p>
+
+<div class="grid" id="cards"></div>
+
+<div id="editor" hidden>
+  <label for="text">本文</label>
+  <textarea id="text" rows="6"></textarea>
+  <div class="count" id="count"></div>
+  <button class="secondary" id="reset">本文を初期値に戻す</button>
+
+  <button id="share" hidden>画像つきで共有（スマホ）</button>
+  <div class="row">
+    <button class="secondary" id="download">画像を保存</button>
+    <button class="secondary" id="copy">本文をコピー</button>
+  </div>
+  <button class="secondary" id="intent">X の投稿画面を開く</button>
+  <p class="note" id="hint"></p>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const MAX_PINS = 4;
+  let pins = [];          // { id, url, title, image, file }
+  let textEdited = false;
+  let loadSeq = 0;
+
+  const status = (msg, isError) => { $("status").textContent = msg || ""; $("status").className = isError ? "note error" : "note"; };
+
+  // X の文字数カウント（URL は 23、CJK などは 2 として数える近似）
+  const weightOf = (ch) => {
+    const c = ch.codePointAt(0);
+    return (c <= 0x10ff || (c >= 0x2000 && c <= 0x200d) || (c >= 0x2010 && c <= 0x201f) || (c >= 0x2032 && c <= 0x2037)) ? 1 : 2;
+  };
+  const xLength = (s) => {
+    let n = 0;
+    const rest = s.replace(/https?:\/\/\S+/g, () => { n += 23; return ""; });
+    for (const ch of rest) n += weightOf(ch);
+    return n;
+  };
+
+  const parseIds = (s) => {
+    const ids = [];
+    for (const m of s.matchAll(/pinterest\.[a-z.]+\/pin\/(\d+)/gi)) if (!ids.includes(m[1])) ids.push(m[1]);
+    return ids;
+  };
+
+  const defaultText = () => pins.length === 1
+    ? [pins[0].title, pins[0].url].filter(Boolean).join("\n")
+    : pins.map((p) => p.url).join("\n");
+
+  const proxied = (img) => "https://images.weserv.nl/?url=" + encodeURIComponent(img.replace(/^https:\/\//, ""));
+
+  async function loadPins() {
+    const all = parseIds($("urls").value);
+    const ids = all.slice(0, MAX_PINS);
+    const seq = ++loadSeq;
+    if (!ids.length) { pins = []; render(); status($("urls").value.trim() ? "Pin の URL が見つかりません（pinterest.com/pin/… の形式のみ対応）" : "", !!$("urls").value.trim()); return; }
+
+    status("読み込み中…");
+    try {
+      // Pinterest の埋め込みウィジェット用 API（非公式・CORS 対応）
+      const res = await fetch("https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=" + ids.join(","));
+      const json = await res.json();
+      if (seq !== loadSeq) return;
+      const byId = Object.fromEntries((json.data || []).filter(Boolean).map((p) => [String(p.id), p]));
+      const failed = [];
+      pins = ids.flatMap((id) => {
+        const p = byId[id];
+        const img = p && !p.error && (p.images?.["564x"] || p.images?.["236x"])?.url;
+        if (!img) { failed.push(id); return []; }
+        return [{
+          id,
+          url: `https://www.pinterest.com/pin/${id}/`,
+          title: (p.rich_metadata?.title || p.description || "").trim().slice(0, 100),
+          image: img.replace(/\/\d+x\//, "/736x/"),
+          file: null,
+        }];
+      });
+      const msgs = [];
+      if (all.length > MAX_PINS) msgs.push(`${MAX_PINS} 件を超えた分は無視しました`);
+      if (failed.length) msgs.push(`読み込めなかった Pin: ${failed.join(", ")}`);
+      status(msgs.join(" / "), failed.length > 0);
+    } catch (e) {
+      if (seq !== loadSeq) return;
+      pins = [];
+      status("Pin 情報の取得に失敗しました（" + e.message + "）", true);
+    }
+    render();
+  }
+
+  function render() {
+    const cards = $("cards");
+    cards.textContent = "";
+    pins.forEach((p, i) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      const img = document.createElement("img");
+      img.src = p.image; img.alt = p.title; img.loading = "lazy";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const title = document.createElement("div");
+      title.className = "title"; title.textContent = p.title || "(no title)";
+      const ctrl = document.createElement("div");
+      ctrl.className = "ctrl";
+      const mk = (label, disabled, fn) => { const b = document.createElement("button"); b.className = "secondary"; b.textContent = label; b.disabled = disabled; b.onclick = fn; ctrl.append(b); };
+      mk("←", i === 0, () => move(i, -1));
+      mk("→", i === pins.length - 1, () => move(i, 1));
+      mk("削除", false, () => remove(i));
+      meta.append(title, ctrl);
+      card.append(img, meta);
+      cards.append(card);
+    });
+
+    $("editor").hidden = !pins.length;
+    if (!textEdited) $("text").value = defaultText();
+    updateCount();
+    updateShareButton();
+  }
+
+  // 並べ替え・削除は URL 欄にも反映する
+  const syncUrls = () => { $("urls").value = pins.map((p) => p.url).join("\n"); };
+  const move = (i, d) => { [pins[i], pins[i + d]] = [pins[i + d], pins[i]]; syncUrls(); render(); };
+  const remove = (i) => { pins.splice(i, 1); syncUrls(); render(); };
+
+  function updateCount() {
+    const n = xLength($("text").value);
+    $("count").textContent = `${n} / 280`;
+    $("count").className = n > 280 ? "count over" : "count";
+  }
+
+  async function getFiles() {
+    return Promise.all(pins.map(async (p, i) => {
+      if (p.file) return p.file;
+      // i.pinimg.com は CORS を返さないため、CORS 対応の画像プロキシ経由で取得
+      const res = await fetch(proxied(p.image));
+      if (!res.ok) throw new Error("画像の取得に失敗 (HTTP " + res.status + ")");
+      const blob = await res.blob();
+      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+      p.file = new File([blob], `pin-${i + 1}-${p.id}.${ext}`, { type: blob.type || "image/jpeg" });
+      return p.file;
+    }));
+  }
+
+  // 画像つき共有に対応していれば共有ボタンを出す（主にスマホ）
+  function updateShareButton() {
+    const probe = new File([new Blob([""], { type: "image/jpeg" })], "probe.jpg", { type: "image/jpeg" });
+    const can = pins.length > 0 && !!navigator.canShare && navigator.canShare({ files: [probe] });
+    $("share").hidden = !can;
+    $("hint").textContent = can
+      ? "スマホ: 「画像つきで共有」→ 共有メニューで X を選択。"
+      : "PC: 「画像を保存」→「X の投稿画面を開く」→ 保存した画像を手動で添付。";
+  }
+
+  let urlTimer;
+  $("urls").addEventListener("input", () => { clearTimeout(urlTimer); urlTimer = setTimeout(loadPins, 400); });
+  $("text").addEventListener("input", () => { textEdited = true; updateCount(); });
+  $("reset").onclick = () => { textEdited = false; $("text").value = defaultText(); updateCount(); };
+
+  $("share").onclick = async () => {
+    try {
+      $("share").disabled = true;
+      status("画像を準備中…");
+      const files = await getFiles();
+      status("");
+      await navigator.share({ files, text: $("text").value });
+    } catch (e) {
+      if (e.name !== "AbortError") status("共有に失敗しました（" + e.message + "）", true);
+    } finally {
+      $("share").disabled = false;
+    }
+  };
+
+  $("download").onclick = async () => {
+    try {
+      $("download").disabled = true;
+      status("画像を準備中…");
+      const files = await getFiles();
+      for (const f of files) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(f);
+        a.download = f.name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      status(`${files.length} 枚保存しました（ブラウザが複数ダウンロードの許可を求めたら許可してください）`);
+    } catch (e) {
+      status(e.message, true);
+    } finally {
+      $("download").disabled = false;
+    }
+  };
+
+  $("copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText($("text").value);
+      status("本文をコピーしました");
+    } catch (e) {
+      status("コピーに失敗しました（" + e.message + "）", true);
+    }
+  };
+
+  $("intent").onclick = () => {
+    window.open("https://x.com/intent/post?" + new URLSearchParams({ text: $("text").value }), "_blank", "noopener");
+  };
+</script>
+
+</body>
+</html>

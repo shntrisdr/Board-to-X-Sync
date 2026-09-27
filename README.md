@@ -18,11 +18,29 @@ Pinterest ボードの RSS ──(1日1回)──> Pipedream ──> メール�
 |---|---|
 | `pipedream/rss-notify.mjs` | Pipedream の Node.js ステップ。RSS を読み、未通知の Pin をメールで送る |
 | `share.html` | 画像つき共有ページ。Web Share API で画像と本文をスマホの共有メニューに渡す |
+| `pin-draft.html` | 手動用ツール。Pin の URL を最大 4 つ貼ると、画像 4 枚つきの X 投稿の下書きを作る（下記） |
 | `index.html` / `privacy-policy.html` | 公開ページ（GitHub Pages、`main` のルートから配信） |
 
 - **新着の判定**: 通知済みの Pin の URL を Pipedream の Data Store（キー `seenPins`、最大 300 件）に覚えておき、まだ通知していない Pin を新着とする。RSS の日時は Pin の作成日の可能性があり、保存した日時とずれるので使わない。
 - **初回実行**: `seenPins` がないときは RSS の先頭 1 件だけを試しに通知し、RSS に載っている Pin をすべて通知済みにする。
 - **画像の取得**: `i.pinimg.com` は CORS ヘッダーを返さないため、`share.html` は [images.weserv.nl](https://images.weserv.nl/) を経由して画像を取得する。RSS のサムネイル（`236x`）は `736x` に差し替えている。
+
+## Pin Draft（pin-draft.html）
+
+https://shntrisdr.github.io/Board-to-X-Sync/pin-draft.html
+
+好きな Pin を最大 4 つ選んで、1 つの投稿にまとめるための手動ツール。
+
+1. Pin の URL（`https://www.pinterest.com/pin/<ID>/`）を 1 行に 1 つ貼る（5 つ以上は無視）
+2. 画像とタイトルがプレビューされる。← → で並べ替え、「削除」で外せる
+3. 本文を編集する（初期値は、1 件ならタイトルと URL、複数なら各 Pin の URL）。X の文字数（URL は 23、日本語は 2）で数えて 280 を超えると赤くなる
+4. 出力
+   - スマホ: 「画像つきで共有」→ 共有メニューで X を選ぶ（画像 4 枚と本文を渡す）
+   - PC: 「画像を保存」で 4 枚ダウンロード → 「X の投稿画面を開く」（本文は入力済み）→ 画像を手動で添付
+
+- Pin の情報は Pinterest の埋め込みウィジェット用 API（`widgets.pinterest.com/v3/pidgets/pins/info/`）から取得する。**非公式**で CORS に対応しているため使っているが、予告なく使えなくなる可能性がある。
+- `pin.it/…` の短縮 URL には対応していない（リダイレクト先をブラウザから読めないため）。Pinterest を PC で開いて URL をコピーするか、短縮 URL を一度ブラウザで開いて展開してから貼る。
+- 画像は `share.html` と同じく images.weserv.nl を経由して取得する。
 
 ## Pipedream の設定
 
