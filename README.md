@@ -20,8 +20,12 @@ Pinterest ボードの RSS ──(1日1回)──> Pipedream ──> メール�
 | `share.html` | 画像つき共有ページ。Web Share API で画像と本文をスマホの共有メニューに渡す |
 | `index.html` / `privacy-policy.html` | 公開ページ（GitHub Pages、`main` のルートから配信） |
 
-- **新着の判定**: 通知済みの Pin の画像ファイル名（`i.pinimg.com/236x/xx/xx/xx/<32 桁の hash>.jpg` の hash）を Pipedream の Data Store（キー `seenImages`、最大 3000 件）に覚えておき、まだ通知していない Pin を新着とする。RSS の Pin URL は数字 ID から `e1_...` のトークンに変わったり、取得のたびに変わったりするので識別子には使わない。RSS の日時も Pin の作成日の可能性があり、保存した日時とずれるので使わない。画像のない項目（毎回 URL が変わる中身のない項目が混ざる）は無視する。
-- **初回実行**: `seenImages` がないときは RSS の先頭 1 件だけを試しに通知し、RSS に載っている Pin をすべて通知済みにする。
+- **新着の判定**: 通知済みの Pin の画像ファイル名（`i.pinimg.com/236x/xx/xx/xx/<32 桁の hash>.jpg` の hash）を Pipedream の Data Store（キー `seenImages`、最大 3000 件）に覚えておき、まだ通知していない Pin のうち **90 日以内に保存したもの** を新着とする。
+  - RSS の Pin URL は数字 ID から `e1_...` のトークンに変わったり、取得のたびに変わったりするので識別子には使わない。
+  - RSS は取得のたびに中身（載る Pin・並び順）が違い、昔の Pin がまとめて載ることもある。そのため 1 回の実行で 5 回取得して合わせ、RSS の日時（Pin を保存した日時。他人の昔の Pin を保存しても保存した日時になる）で古い Pin を除く。
+  - 保存してから RSS に載るまで数週間かかることがある。
+  - 画像のない項目（毎回 URL が変わり日時もない中身のない項目が混ざる）は無視する。
+- **初回実行**: `seenImages` がないときは RSS を 30 回取得して、載っている Pin をすべて通知済みにし、最新の 1 件だけを試しに通知する。
 - **画像の取得**: `i.pinimg.com` は CORS ヘッダーを返さないため、`share.html` は [images.weserv.nl](https://images.weserv.nl/) を経由して画像を取得する。RSS のサムネイル（`236x`）は `736x` に差し替えている。
 
 ## Pipedream の設定
@@ -30,6 +34,7 @@ Pinterest ボードの RSS ──(1日1回)──> Pipedream ──> メール�
    - Trigger: **Schedule**（1 日 1 回、朝）
    - Automatically retry on errors: **OFF**
    - Limit concurrency: **ON（1）**
+   - Timeout: **120 秒**（初回は RSS を 30 回取得するので 30 秒では足りない）
    - Send error notifications: ON
 2. **Node.js ステップ**: `pipedream/rss-notify.mjs` の内容をそのまま貼り付ける
    - 4 行目の `RSS_URL` を自分のボードに書き換える。ボードを開いたときの URL の末尾の `/` を `.rss` に置き換えたもの（例: `https://www.pinterest.com/<ユーザー名>/<ボード名>.rss`）。漢字やハングルが入っていてもそのまま書いてよい
@@ -44,7 +49,7 @@ Data Store の `seenImages` を削除して Test を押すと、初回扱いに�
 
 ## 既知の制約
 
-- Pinterest の RSS に載るのは最新 25 件程度。1 回の実行の間に 25 件以上保存すると、あふれた分は通知されない。
+- Pinterest の RSS に載るのは 1 回あたり 25 件程度で、どの Pin が載るかは Pinterest 次第。保存した Pin が RSS に載らないまま 90 日たつと通知されない。
 - 秘密ボードには RSS がない（404 になる）。プロフィールの「ピン」タブ（`/<ユーザー名>/pins/`）もボードではないので使えない。
 - 画像つき投稿はスマホ専用（PC のブラウザはファイルの共有にほぼ対応していない）。X アプリが共有された本文を反映するかは OS やアプリのバージョンによる。
 - 画像を直接添付すると X に再アップロードすることになる。他人の画像の Pin は著作権に注意。
