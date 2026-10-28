@@ -4,10 +4,14 @@ import Parser from "rss-parser";
 const RSS_URL = "https://www.pinterest.com/USERNAME/BOARD.rss";
 // 投稿文の最大文字数（URL は X 側で 23 文字扱いなので余裕を持たせる）
 const MAX_TEXT = 200;
-// 通知済みとして覚えておく Pin の数（RSS は最新 25 件程度なので十分な余裕）
-const SEEN_LIMIT = 300;
+// 通知済みとして覚えておく Pin の数（RSS に載る Pin の顔ぶれが入れ替わることがあるので多めに）
+const SEEN_LIMIT = 3000;
 // 画像つき共有ページ（GitHub Pages）
 const SHARE_PAGE = "https://shntrisdr.github.io/Board-to-X-Sync/share.html";
+
+// Pin の識別子。RSS の Pin URL は数字 ID → e1_... のトークンに変わったり、取得のたびに変わったりして当てにならないため、
+// 画像ファイル名（https://i.pinimg.com/236x/33/ab/76/<hash>.jpg の <hash>）を使う
+const pinKey = (image) => image?.match(/\/([0-9a-f]{32})\.\w+$/)?.[1];
 
 const esc = (s) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
 
@@ -27,19 +31,21 @@ export default defineComponent({
         link: it.link,
         image: it.content?.match(/<img src="([^"]+)"/)?.[1],
       }))
-      .filter((it) => it.link);
+      .map((it) => ({ ...it, key: pinKey(it.image) }))
+      // 画像のない項目は除外（毎回 URL が変わる画像・タイトルなしの項目が RSS に混ざり、毎日通知されていた）
+      .filter((it) => it.link && it.key);
 
     if (!this.db) throw new Error("State store が未選択です（ステップ上部の State store 欄で Data Store を選択/作成）");
 
     // まだ通知していない Pin を新着とみなす。初回は先頭 1 件だけ試しに通知する
-    const seen = await this.db.get("seenPins");
+    const seen = await this.db.get("seenImages");
     const seenSet = new Set(seen ?? []);
-    const fresh = seen == null ? items.slice(0, 1) : items.filter((it) => !seenSet.has(it.link));
+    const fresh = seen == null ? items.slice(0, 1) : items.filter((it) => !seenSet.has(it.key));
 
     // 今回 RSS に載っている Pin を全部通知済みにする（新しい順に先頭へ）
-    const updated = [...new Set([...items.map((it) => it.link), ...(seen ?? [])])].slice(0, SEEN_LIMIT);
+    const updated = [...new Set([...items.map((it) => it.key), ...(seen ?? [])])].slice(0, SEEN_LIMIT);
     if (!fresh.length) {
-      await this.db.set("seenPins", updated);
+      await this.db.set("seenImages", updated);
       $.export("$summary", "No new Pins");
       return;
     }
@@ -76,7 +82,7 @@ export default defineComponent({
       ].filter(Boolean).join("\n")).join("\n\n"),
     });
 
-    await this.db.set("seenPins", updated);
+    await this.db.set("seenImages", updated);
     $.export("$summary", `Notified ${cards.length} Pin(s)`);
     return cards.map(({ link, intent, share }) => ({ link, intent, share }));
   },

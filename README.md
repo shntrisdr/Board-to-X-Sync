@@ -20,8 +20,8 @@ Pinterest ボードの RSS ──(1日1回)──> Pipedream ──> メール�
 | `share.html` | 画像つき共有ページ。Web Share API で画像と本文をスマホの共有メニューに渡す |
 | `index.html` / `privacy-policy.html` | 公開ページ（GitHub Pages、`main` のルートから配信） |
 
-- **新着の判定**: 通知済みの Pin の URL を Pipedream の Data Store（キー `seenPins`、最大 300 件）に覚えておき、まだ通知していない Pin を新着とする。RSS の日時は Pin の作成日の可能性があり、保存した日時とずれるので使わない。
-- **初回実行**: `seenPins` がないときは RSS の先頭 1 件だけを試しに通知し、RSS に載っている Pin をすべて通知済みにする。
+- **新着の判定**: 通知済みの Pin の画像ファイル名（`i.pinimg.com/236x/xx/xx/xx/<32 桁の hash>.jpg` の hash）を Pipedream の Data Store（キー `seenImages`、最大 3000 件）に覚えておき、まだ通知していない Pin を新着とする。RSS の Pin URL は数字 ID から `e1_...` のトークンに変わったり、取得のたびに変わったりするので識別子には使わない。RSS の日時も Pin の作成日の可能性があり、保存した日時とずれるので使わない。画像のない項目（毎回 URL が変わる中身のない項目が混ざる）は無視する。
+- **初回実行**: `seenImages` がないときは RSS の先頭 1 件だけを試しに通知し、RSS に載っている Pin をすべて通知済みにする。
 - **画像の取得**: `i.pinimg.com` は CORS ヘッダーを返さないため、`share.html` は [images.weserv.nl](https://images.weserv.nl/) を経由して画像を取得する。RSS のサムネイル（`236x`）は `736x` に差し替えている。
 
 ## Pipedream の設定
@@ -40,7 +40,7 @@ Pinterest ボードの RSS ──(1日1回)──> Pipedream ──> メール�
 
 ### 動作確認のやり直し
 
-Data Store の `seenPins` を削除して Test を押すと、初回扱いになって RSS の先頭 1 件が届く。
+Data Store の `seenImages` を削除して Test を押すと、初回扱いになって RSS の先頭 1 件が届く。
 
 ## 既知の制約
 
